@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Music Playlist Manager</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#121212;--bg-elevated:#181818;--bg-highlight:#282828;--bg-card:#181818;--text-primary:#fff;--text-secondary:#b3b3b3;--text-subdued:#6a6a6a;--accent:#1DB954;--accent-hover:#1ed760;--player-height:90px;--sidebar-width:280px;--border-radius:8px}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text-primary);font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;display:flex;flex-direction:column}
+a{color:inherit;text-decoration:none}
+button{background:none;border:none;color:inherit;cursor:pointer;font-family:inherit}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)}
+
+/* Layout */
+.app{display:flex;flex:1;overflow:hidden;height:calc(100vh - var(--player-height))}
+.sidebar{width:var(--sidebar-width);background:var(--bg);display:flex;flex-direction:column;padding:0;overflow:hidden;flex-shrink:0;border-right:1px solid rgba(255,255,255,0.05)}
+.sidebar-section{background:var(--bg-elevated);border-radius:var(--border-radius);margin:8px;padding:12px}
+.sidebar-section:first-child{margin-bottom:0}
+.sidebar-nav-item{display:flex;align-items:center;gap:16px;padding:8px 12px;border-radius:6px;cursor:pointer;color:var(--text-secondary);font-weight:600;font-size:14px;transition:all 0.15s}
+.sidebar-nav-item:hover{color:var(--text-primary)}
+.sidebar-nav-item.active{color:var(--text-primary)}
+.sidebar-nav-item svg{width:24px;height:24px;fill:currentColor;flex-shrink:0}
+.sidebar-library{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.sidebar-library-header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px}
+.sidebar-library-header span{font-size:14px;font-weight:600;color:var(--text-secondary)}
+.sidebar-library-list{overflow-y:auto;flex:1;padding:4px 8px}
+.sidebar-playlist-item{display:flex;align-items:center;gap:12px;padding:8px;border-radius:6px;cursor:pointer;transition:background 0.15s}
+.sidebar-playlist-item:hover{background:var(--bg-highlight)}
+.sidebar-playlist-item.active{background:var(--bg-highlight)}
+.sidebar-playlist-cover{width:48px;height:48px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.sidebar-playlist-info{overflow:hidden}
+.sidebar-playlist-info .name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-playlist-info .meta{font-size:12px;color:var(--text-subdued);margin-top:2px}
+
+/* Main Content */
+.main-content{flex:1;overflow-y:auto;background:linear-gradient(180deg,#1a1a2e 0%,var(--bg) 300px);padding:0;position:relative}
+.main-content.fade-in{animation:fadeIn 0.25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.content-padding{padding:24px 32px}
+
+/* Section Headers */
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;margin-top:24px}
+.section-header:first-child{margin-top:0}
+.section-header h2{font-size:24px;font-weight:700;letter-spacing:-0.02em}
+.section-header a{font-size:13px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.1em}
+.section-header a:hover{text-decoration:underline}
+
+/* Album Grid */
+.album-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:24px}
+.album-card{background:var(--bg-card);border-radius:var(--border-radius);padding:16px;cursor:pointer;transition:background 0.3s;position:relative}
+.album-card:hover{background:var(--bg-highlight)}
+.album-card:hover .album-play-btn{opacity:1;transform:translateY(0)}
+.album-cover{width:100%;aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:rgba(255,255,255,0.9);text-shadow:0 2px 8px rgba(0,0,0,0.3);position:relative;overflow:hidden;margin-bottom:12px}
+.album-play-btn{position:absolute;bottom:8px;right:8px;width:48px;height:48px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 16px rgba(0,0,0,0.3);opacity:0;transform:translateY(8px);transition:all 0.25s;z-index:2}
+.album-play-btn:hover{background:var(--accent-hover);transform:translateY(0) scale(1.05)!important}
+.album-play-btn svg{width:20px;height:20px;fill:#000;margin-left:2px}
+.album-card .title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.album-card .subtitle{font-size:13px;color:var(--text-secondary);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Track List */
+.track-list{width:100%}
+.track-list-header{display:grid;grid-template-columns:40px 1fr 1fr 100px;gap:16px;padding:0 16px 8px;border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-subdued);font-size:12px;text-transform:uppercase;letter-spacing:0.1em}
+.track-row{display:grid;grid-template-columns:40px 1fr 1fr 100px;gap:16px;padding:8px 16px;border-radius:4px;align-items:center;cursor:pointer;transition:background 0.15s}
+.track-row:hover{background:rgba(255,255,255,0.1)}
+.track-row:nth-child(even){background:rgba(255,255,255,0.03)}
+.track-row:nth-child(even):hover{background:rgba(255,255,255,0.1)}
+.track-row.playing{color:var(--accent)}
+.track-num{text-align:center;color:var(--text-secondary);font-size:14px;position:relative}
+.track-row:hover .track-num .num-text{display:none}
+.track-row:hover .track-num .play-icon{display:block}
+.track-num .play-icon{display:none}
+.track-row.playing .track-num .num-text{display:none}
+.track-row.playing .track-num .now-playing-anim{display:flex}
+.track-info{overflow:hidden}
+.track-info .track-title{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track-info .track-artist{font-size:13px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.track-info .track-artist:hover{text-decoration:underline;color:var(--text-primary)}
+.track-album{font-size:13px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track-duration-cell{display:flex;align-items:center;gap:12px}
+.track-like{color:var(--text-subdued);cursor:pointer;opacity:0;transition:all 0.15s;flex-shrink:0}
+.track-row:hover .track-like{opacity:1}
+.track-like.liked{color:var(--accent);opacity:1}
+.track-like:hover{color:var(--text-primary)}
+.track-like.liked:hover{color:var(--accent-hover)}
+.track-duration{font-size:13px;color:var(--text-secondary)}
+
+/* Now Playing Animation */
+.now-playing-anim{display:none;align-items:flex-end;gap:2px;height:14px}
+.now-playing-anim span{width:3px;background:var(--accent);border-radius:1px;animation:bounce 0.6s ease-in-out infinite}
+.now-playing-anim span:nth-child(1){animation-delay:0s;height:6px}
+.now-playing-anim span:nth-child(2){animation-delay:0.15s;height:10px}
+.now-playing-anim span:nth-child(3){animation-delay:0.3s;height:4px}
+.now-playing-anim span:nth-child(4){animation-delay:0.45s;height:8px}
+@keyframes bounce{0%,100%{height:4px}50%{height:14px}}
+
+/* Playlist View */
+.playlist-header{display:flex;gap:24px;padding:32px;background:linear-gradient(180deg,rgba(80,56,160,0.6) 0%,rgba(80,56,160,0.1) 100%);align-items:flex-end}
+.playlist-header-cover{width:232px;height:232px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:700;box-shadow:0 4px 60px rgba(0,0,0,0.5);flex-shrink:0}
+.playlist-header-info{min-width:0}
+.playlist-header-info .label{font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:0.1em}
+.playlist-header-info h1{font-size:48px;font-weight:900;margin:8px 0;letter-spacing:-0.04em;line-height:1.1}
+.playlist-header-info .description{color:var(--text-secondary);font-size:14px;margin-bottom:8px}
+.playlist-header-info .meta{font-size:14px;color:var(--text-secondary)}
+.playlist-header-info .meta strong{color:var(--text-primary)}
+.playlist-controls{display:flex;align-items:center;gap:24px;padding:16px 32px}
+.play-btn-large{width:56px;height:56px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.play-btn-large:hover{background:var(--accent-hover);transform:scale(1.05)}
+.play-btn-large svg{width:24px;height:24px;fill:#000;margin-left:2px}
+
+/* Artist View */
+.artist-header{padding:60px 32px 32px;background:linear-gradient(180deg,rgba(50,80,130,0.6) 0%,transparent 100%);display:flex;align-items:flex-end;gap:24px}
+.artist-avatar{width:180px;height:180px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:56px;font-weight:700;box-shadow:0 4px 40px rgba(0,0,0,0.5);flex-shrink:0}
+.artist-header-info h1{font-size:56px;font-weight:900;letter-spacing:-0.04em}
+.artist-header-info .genre{color:var(--text-secondary);font-size:14px;margin-top:8px}
+
+/* Search Page */
+.search-input-container{position:relative;max-width:480px;margin-bottom:24px}
+.search-input{width:100%;padding:12px 16px 12px 44px;background:var(--bg-highlight);border:none;border-radius:24px;color:var(--text-primary);font-size:14px;outline:none}
+.search-input:focus{outline:2px solid var(--text-primary)}
+.search-input::placeholder{color:var(--text-subdued)}
+.search-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--text-subdued)}
+.search-icon svg{width:18px;height:18px;fill:currentColor}
+
+/* Genre Cards */
+.genre-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.genre-card{height:120px;border-radius:var(--border-radius);padding:16px;font-size:20px;font-weight:700;cursor:pointer;overflow:hidden;position:relative;transition:transform 0.15s}
+.genre-card:hover{transform:scale(1.02)}
+
+/* Player Bar */
+.player-bar{height:var(--player-height);background:#181818;border-top:1px solid rgba(255,255,255,0.05);display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:0 16px;position:relative;z-index:100}
+.player-track{display:flex;align-items:center;gap:14px;min-width:0}
+.player-track-art{width:56px;height:56px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0}
+.player-track-info{min-width:0}
+.player-track-info .name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.player-track-info .name:hover{text-decoration:underline}
+.player-track-info .artist{font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.player-track-info .artist:hover{text-decoration:underline;color:var(--text-primary)}
+.player-track .player-like{color:var(--text-subdued);cursor:pointer;margin-left:4px}
+.player-track .player-like.liked{color:var(--accent)}
+.player-track .player-like:hover{color:var(--text-primary)}
+.player-controls{display:flex;flex-direction:column;align-items:center;gap:4px}
+.player-buttons{display:flex;align-items:center;gap:16px}
+.player-btn{color:var(--text-secondary);transition:color 0.15s}
+.player-btn:hover{color:var(--text-primary)}
+.player-btn svg{width:20px;height:20px;fill:currentColor}
+.player-btn-play{width:36px;height:36px;border-radius:50%;background:var(--text-primary);display:flex;align-items:center;justify-content:center;transition:transform 0.1s}
+.player-btn-play:hover{transform:scale(1.06)}
+.player-btn-play svg{width:16px;height:16px;fill:#000;margin-left:1px}
+.player-progress{display:flex;align-items:center;gap:8px;width:100%;max-width:600px}
+.player-progress .time{font-size:11px;color:var(--text-subdued);min-width:40px;text-align:center}
+.progress-bar{flex:1;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;cursor:pointer;position:relative}
+.progress-bar:hover{height:6px}
+.progress-bar:hover .progress-bar-thumb{opacity:1}
+.progress-bar-fill{height:100%;background:var(--text-primary);border-radius:2px;position:relative;transition:width 0.1s linear}
+.progress-bar:hover .progress-bar-fill{background:var(--accent)}
+.progress-bar-thumb{width:12px;height:12px;border-radius:50%;background:var(--text-primary);position:absolute;right:-6px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity 0.15s}
+.player-right{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.volume-container{display:flex;align-items:center;gap:8px}
+.volume-container svg{width:18px;height:18px;fill:var(--text-secondary)}
+.volume-bar{width:100px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;cursor:pointer;position:relative}
+.volume-bar:hover{height:6px}
+.volume-bar-fill{height:100%;background:var(--text-primary);border-radius:2px}
+.volume-bar:hover .volume-bar-fill{background:var(--accent)}
+
+/* Library View */
+.library-tabs{display:flex;gap:8px;margin-bottom:24px}
+.library-tab{padding:8px 16px;border-radius:20px;background:rgba(255,255,255,0.07);font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s}
+.library-tab:hover{background:rgba(255,255,255,0.14)}
+.library-tab.active{background:var(--text-primary);color:#000}
+
+/* Responsive */
+@media(max-width:768px){
+.sidebar{display:none}
+.mobile-nav{display:flex!important}
+.content-padding{padding:16px}
+.album-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.playlist-header{padding:16px;gap:16px;flex-direction:column;align-items:center;text-align:center}
+.playlist-header-cover{width:160px;height:160px;font-size:48px}
+.playlist-header-info h1{font-size:28px}
+.artist-header{padding:32px 16px;flex-direction:column;align-items:center;text-align:center}
+.artist-avatar{width:120px;height:120px;font-size:36px}
+.artist-header-info h1{font-size:32px}
+.track-list-header,.track-row{grid-template-columns:40px 1fr 80px}
+.track-album{display:none}
+.player-bar{grid-template-columns:1fr auto}
+.player-right{display:none}
+.player-progress{max-width:none}
+}
+.mobile-nav{display:none;position:fixed;bottom:var(--player-height);left:0;right:0;background:var(--bg-elevated);border-top:1px solid rgba(255,255,255,0.05);padding:8px 0;z-index:90;justify-content:space-around}
+.mobile-nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--text-secondary);padding:4px 12px}
+.mobile-nav-item.active{color:var(--text-primary)}
+.mobile-nav-item svg{width:24px;height:24px;fill:currentColor}
+
+/* Skeleton Loading */
+.skeleton{background:linear-gradient(90deg,var(--bg-highlight) 25%,rgba(255,255,255,0.08) 50%,var(--bg-highlight) 75%);background-size:200%;animation:shimmer 1.5s infinite;border-radius:4px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+</style>
+</head>
+<body>
+
+<div class="app">
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-section">
+  <div class="sidebar-nav-item active" onclick="navigate('home')" data-view="home">
+    <svg viewBox="0 0 24 24"><path d="M12.5 3.247a1 1 0 0 0-1 0L4 7.577V20h4.5v-6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v6H20V7.577l-7.5-4.33zm-2-1.732a3 3 0 0 1 3 0l7.5 4.33a2 2 0 0 1 1 1.732V21a1 1 0 0 1-1 1h-6.5a1 1 0 0 1-1-1v-6h-3v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.577a2 2 0 0 1 1-1.732l7.5-4.33z"/></svg>
+    Home
+  </div>
+  <div class="sidebar-nav-item" onclick="navigate('search')" data-view="search">
+    <svg viewBox="0 0 24 24"><path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.28-9.407-9.28zm-7.407 9.28c0-4.006 3.302-7.28 7.407-7.28s7.407 3.274 7.407 7.279-3.302 7.279-7.407 7.279-7.407-3.273-7.407-7.279z"/></svg>
+    Search
+  </div>
+</div>
+<div class="sidebar-section sidebar-library">
+  <div class="sidebar-library-header">
+    <div class="sidebar-nav-item" onclick="navigate('library')" data-view="library" style="padding:0">
+      <svg viewBox="0 0 24 24"><path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.134A1 1 0 0 0 14 3v18a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6.464a1 1 0 0 0-.5-.866l-6-3.464zM7 3a1 1 0 0 0-2 0v18a1 1 0 1 0 2 0V3z"/></svg>
+      <span>Your Library</span>
+    </div>
+  </div>
+  <div class="sidebar-library-list" id="sidebar-playlists"></div>
+</div>
+</nav>
+
+<!-- Main Content -->
+<main class="main-content" id="main-content"></main>
+</div>
+
+<!-- Mobile Navigation -->
+<div class="mobile-nav" id="mobile-nav">
+<div class="mobile-nav-item active" onclick="navigate('home')" data-view="home">
+  <svg viewBox="0 0 24 24"><path d="M12.5 3.247a1 1 0 0 0-1 0L4 7.577V20h4.5v-6a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v6H20V7.577l-7.5-4.33z"/></svg>
+  Home
+</div>
+<div class="mobile-nav-item" onclick="navigate('search')" data-view="search">
+  <svg viewBox="0 0 24 24"><path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.28-9.407-9.28z"/></svg>
+  Search
+</div>
+<div class="mobile-nav-item" onclick="navigate('library')" data-view="library">
+  <svg viewBox="0 0 24 24"><path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.134A1 1 0 0 0 14 3v18a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6.464a1 1 0 0 0-.5-.866l-6-3.464zM7 3a1 1 0 0 0-2 0v18a1 1 0 1 0 2 0V3z"/></svg>
+  Library
+</div>
+</div>
+
+<!-- Player Bar -->
+<div class="player-bar" id="player-bar">
+<div class="player-track" id="player-track">
+  <div class="player-track-art" id="player-art" style="background:#333">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="rgba(255,255,255,0.3)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+  </div>
+  <div class="player-track-info">
+    <div class="name" id="player-track-name">No track playing</div>
+    <div class="artist" id="player-track-artist"></div>
+  </div>
+  <button class="player-like" id="player-like-btn" onclick="toggleCurrentLike()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </button>
+</div>
+<div class="player-controls">
+  <div class="player-buttons">
+    <button class="player-btn" onclick="prevTrack()"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+    <button class="player-btn-play" id="play-pause-btn" onclick="togglePlay()">
+      <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="pause-icon" viewBox="0 0 24 24" style="display:none"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>
+    </button>
+    <button class="player-btn" onclick="nextTrack()"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+  </div>
+  <div class="player-progress">
+    <span class="time" id="progress-current">0:00</span>
+    <div class="progress-bar" id="progress-bar" onclick="seekTo(event)">
+      <div class="progress-bar-fill" id="progress-fill" style="width:0%">
+        <div class="progress-bar-thumb"></div>
+      </div>
+    </div>
+    <span class="time" id="progress-total">0:00</span>
+  </div>
+</div>
+<div class="player-right">
+  <div class="volume-container">
+    <svg viewBox="0 0 24 24" id="volume-icon"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    <div class="volume-bar" id="volume-bar" onclick="setVolume(event)">
+      <div class="volume-bar-fill" id="volume-fill" style="width:80%"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// State
+let state = {
+  artists: [], albums: [], tracks: [], playlists: [],
+  currentView: 'home', currentTrack: null, isPlaying: false,
+  queue: [], queuePosition: 0, volume: 80, progress: 0,
+  likedTracks: new Set(), searchQuery: '', recentlyPlayed: []
+};
+
+// Color palette for covers
+const colors = [
+  '#e13300','#1DB954','#509bf5','#af2896','#e8115b',
+  '#f59b23','#148a08','#dc148c','#8400e7','#1e3264',
+  '#e91429','#056952','#537aa8','#503890','#477d95',
+  '#ba5d07','#1a7335','#5179a1','#608108','#c45113'
+];
+function getColor(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i);
+  return colors[Math.abs(h) % colors.length];
+}
+function getInitials(str) {
+  return str.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+}
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+function formatTotalDuration(tracks) {
+  let total = tracks.reduce((sum, t) => sum + (t.duration_seconds || 0), 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return h > 0 ? `${h} hr ${m} min` : `${m} min`;
+}
+
+// API
+async function api(path, opts) {
+  const r = await fetch('/api' + path, opts);
+  return r.json();
+}
+
+// Data Loading
+async function loadData() {
+  const [artists, albums, tracks, playlists] = await Promise.all([
+    api('/artists'), api('/albums'), api('/tracks'), api('/playlists')
+  ]);
+  state.artists = artists || [];
+  state.albums = albums || [];
+  state.tracks = tracks || [];
+  state.playlists = playlists || [];
+  try {
+    const liked = await api('/library/liked');
+    state.likedTracks = new Set((liked || []).map(t => t.id));
+  } catch(e) {}
+  renderSidebar();
+}
+
+// Navigation
+function navigate(view, data) {
+  state.currentView = view;
+  state.viewData = data;
+  const main = document.getElementById('main-content');
+  main.classList.remove('fade-in');
+  void main.offsetWidth;
+  main.classList.add('fade-in');
+  render();
+  main.scrollTop = 0;
+  // Update active states
+  document.querySelectorAll('.sidebar-nav-item,.mobile-nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+}
+
+function render() {
+  const main = document.getElementById('main-content');
+  switch (state.currentView) {
+    case 'home': main.innerHTML = renderHome(); break;
+    case 'search': main.innerHTML = renderSearch(); break;
+    case 'library': main.innerHTML = renderLibrary(); break;
+    case 'album': main.innerHTML = renderAlbumView(); break;
+    case 'artist': main.innerHTML = renderArtistView(); break;
+    case 'playlist': main.innerHTML = renderPlaylistView(); break;
+    default: main.innerHTML = renderHome();
+  }
+}
+
+// Sidebar
+function renderSidebar() {
+  const el = document.getElementById('sidebar-playlists');
+  el.innerHTML = [
+    `<div class="sidebar-playlist-item" onclick="navigate('library',{tab:'liked'})">
+      <div class="sidebar-playlist-cover" style="background:linear-gradient(135deg,#450af5,#c4efd9)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      </div>
+      <div class="sidebar-playlist-info">
+        <div class="name">Liked Songs</div>
+        <div class="meta">Playlist &middot; ${state.likedTracks.size} songs</div>
+      </div>
+    </div>`,
+    ...state.playlists.map(p => `
+      <div class="sidebar-playlist-item ${state.currentView==='playlist'&&state.viewData?.id===p.id?'active':''}" onclick="navigate('playlist',{id:'${p.id}'})">
+        <div class="sidebar-playlist-cover" style="background:${getColor(p.name)}">${getInitials(p.name)}</div>
+        <div class="sidebar-playlist-info">
+          <div class="name">${p.name}</div>
+          <div class="meta">Playlist &middot; ${(p.track_ids||[]).length} songs</div>
+        </div>
+      </div>`)
+  ].join('');
+}
+
+// SVG Icons
+const playTriangle = '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M8 5v14l11-7z" fill="#000"/></svg>';
+const heartEmpty = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+const heartFull = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+
+// Home View
+function renderHome() {
+  const newReleases = [...state.albums].sort((a,b) => b.year - a.year).slice(0, 8);
+  const genresSet = new Set(state.artists.map(a => a.genre).filter(Boolean));
+  const genres = [...genresSet].slice(0, 6);
+  // Top tracks: in most playlists
+  const trackCount = {};
+  state.playlists.forEach(p => (p.track_ids||[]).forEach(id => trackCount[id] = (trackCount[id]||0) + 1));
+  const topTrackIds = Object.entries(trackCount).sort((a,b) => b[1]-a[1]).slice(0,10).map(e => e[0]);
+  const topTracks = topTrackIds.map(id => state.tracks.find(t => t.id === id)).filter(Boolean);
+
+  return `<div class="content-padding">
+    <div class="section-header"><h2>Good evening</h2></div>
+    <div class="genre-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:32px">
+      ${state.playlists.slice(0,6).map(p => `
+        <div style="background:var(--bg-highlight);border-radius:4px;display:flex;align-items:center;gap:0;cursor:pointer;overflow:hidden;height:64px" onclick="navigate('playlist',{id:'${p.id}'})">
+          <div style="width:64px;height:64px;background:${getColor(p.name)};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0">${getInitials(p.name)}</div>
+          <span style="padding:0 16px;font-weight:700;font-size:14px">${p.name}</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="section-header"><h2>New Releases</h2></div>
+    <div class="album-grid">
+      ${newReleases.map(a => renderAlbumCard(a)).join('')}
+    </div>
+
+    ${topTracks.length ? `
+    <div class="section-header" style="margin-top:40px"><h2>Popular Tracks</h2></div>
+    <div class="track-list">
+      <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+      ${topTracks.map((t,i) => renderTrackRow(t, i+1, topTracks)).join('')}
+    </div>` : ''}
+
+    <div class="section-header" style="margin-top:40px"><h2>Browse by Genre</h2></div>
+    <div class="genre-grid">
+      ${genres.map((g,i) => `<div class="genre-card" style="background:${colors[i%colors.length]}" onclick="showGenre('${g}')">${g}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderAlbumCard(album) {
+  const artist = state.artists.find(a => a.id === album.artist_id);
+  return `<div class="album-card" onclick="navigate('album',{id:'${album.id}'})">
+    <div class="album-cover" style="background:${getColor(album.title)}">
+      ${getInitials(album.title)}
+      <button class="album-play-btn" onclick="event.stopPropagation();playAlbum('${album.id}')">${playTriangle}</button>
+    </div>
+    <div class="title">${album.title}</div>
+    <div class="subtitle">${album.year} &middot; ${artist ? artist.name : ''}</div>
+  </div>`;
+}
+
+function renderTrackRow(track, num, contextTracks) {
+  const artist = state.artists.find(a => a.id === track.artist_id);
+  const album = state.albums.find(a => a.id === track.album_id);
+  const isPlaying = state.currentTrack && state.currentTrack.id === track.id;
+  const isLiked = state.likedTracks.has(track.id);
+  const ids = (contextTracks||[]).map(t => t.id);
+  return `<div class="track-row ${isPlaying?'playing':''}" ondblclick="playTrackInContext('${track.id}',${JSON.stringify(ids).replace(/"/g,"'")})">
+    <div class="track-num">
+      <span class="num-text">${num}</span>
+      <span class="play-icon" onclick="playTrackInContext('${track.id}',${JSON.stringify(ids).replace(/"/g,"'")})">${playTriangle.replace('fill="#000"','fill="var(--text-primary)"').replace('width="20"','width="14"').replace('height="20"','height="14"')}</span>
+      <div class="now-playing-anim"><span></span><span></span><span></span><span></span></div>
+    </div>
+    <div class="track-info">
+      <div class="track-title">${track.title}</div>
+      <div class="track-artist" onclick="event.stopPropagation();navigate('artist',{id:'${track.artist_id}'})">${artist ? artist.name : ''}</div>
+    </div>
+    <div class="track-album" onclick="navigate('album',{id:'${track.album_id}'})" style="cursor:pointer">${album ? album.title : ''}</div>
+    <div class="track-duration-cell">
+      <span class="track-like ${isLiked?'liked':''}" onclick="event.stopPropagation();toggleLike('${track.id}')">${isLiked ? heartFull : heartEmpty}</span>
+      <span class="track-duration">${formatDuration(track.duration_seconds)}</span>
+    </div>
+  </div>`;
+}
+
+// Album View
+function renderAlbumView() {
+  const album = state.albums.find(a => a.id === state.viewData?.id);
+  if (!album) return '<div class="content-padding"><h2>Album not found</h2></div>';
+  const artist = state.artists.find(a => a.id === album.artist_id);
+  const tracks = state.tracks.filter(t => t.album_id === album.id).sort((a,b) => a.track_number - b.track_number);
+  return `
+    <div class="playlist-header" style="background:linear-gradient(180deg,${getColor(album.title)}80 0%,${getColor(album.title)}10 100%)">
+      <div class="playlist-header-cover" style="background:${getColor(album.title)}">${getInitials(album.title)}</div>
+      <div class="playlist-header-info">
+        <div class="label">Album</div>
+        <h1>${album.title}</h1>
+        <div class="meta">
+          <strong style="cursor:pointer" onclick="navigate('artist',{id:'${album.artist_id}'})">${artist ? artist.name : ''}</strong>
+          &middot; ${album.year} &middot; ${tracks.length} songs, ${formatTotalDuration(tracks)}
+        </div>
+      </div>
+    </div>
+    <div class="playlist-controls">
+      <button class="play-btn-large" onclick="playAlbum('${album.id}')">${playTriangle}</button>
+    </div>
+    <div style="padding:0 32px 32px">
+      <div class="track-list">
+        <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+        ${tracks.map((t,i) => renderTrackRow(t, i+1, tracks)).join('')}
+      </div>
+    </div>`;
+}
+
+// Artist View
+function renderArtistView() {
+  const artist = state.artists.find(a => a.id === state.viewData?.id);
+  if (!artist) return '<div class="content-padding"><h2>Artist not found</h2></div>';
+  const artistAlbums = state.albums.filter(a => a.artist_id === artist.id);
+  const artistTracks = state.tracks.filter(t => t.artist_id === artist.id);
+  const related = state.artists.filter(a => a.genre === artist.genre && a.id !== artist.id);
+  return `
+    <div class="artist-header" style="background:linear-gradient(180deg,${getColor(artist.name)}60 0%,transparent 100%)">
+      <div class="artist-avatar" style="background:${getColor(artist.name)}">${getInitials(artist.name)}</div>
+      <div class="artist-header-info">
+        <h1>${artist.name}</h1>
+        <div class="genre">${artist.genre}</div>
+      </div>
+    </div>
+    <div class="content-padding">
+      <p style="color:var(--text-secondary);margin-bottom:24px;max-width:600px">${artist.bio || ''}</p>
+      <div class="section-header"><h2>Top Tracks</h2></div>
+      <div class="track-list" style="margin-bottom:32px">
+        ${artistTracks.slice(0,5).map((t,i) => renderTrackRow(t, i+1, artistTracks)).join('')}
+      </div>
+      <div class="section-header"><h2>Albums</h2></div>
+      <div class="album-grid" style="margin-bottom:32px">
+        ${artistAlbums.map(a => renderAlbumCard(a)).join('')}
+      </div>
+      ${related.length ? `
+      <div class="section-header"><h2>Related Artists</h2></div>
+      <div class="album-grid">
+        ${related.map(a => `
+          <div class="album-card" onclick="navigate('artist',{id:'${a.id}'})">
+            <div class="album-cover" style="background:${getColor(a.name)};border-radius:50%">${getInitials(a.name)}</div>
+            <div class="title" style="text-align:center">${a.name}</div>
+            <div class="subtitle" style="text-align:center">${a.genre}</div>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>`;
+}
+
+// Playlist View
+function renderPlaylistView() {
+  const playlist = state.playlists.find(p => p.id === state.viewData?.id);
+  if (!playlist) return '<div class="content-padding"><h2>Playlist not found</h2></div>';
+  const tracks = (playlist.track_ids || []).map(id => state.tracks.find(t => t.id === id)).filter(Boolean);
+  return `
+    <div class="playlist-header">
+      <div class="playlist-header-cover" style="background:${getColor(playlist.name)}">${getInitials(playlist.name)}</div>
+      <div class="playlist-header-info">
+        <div class="label">Playlist</div>
+        <h1>${playlist.name}</h1>
+        <div class="description">${playlist.description || ''}</div>
+        <div class="meta">${tracks.length} songs, ${formatTotalDuration(tracks)}</div>
+      </div>
+    </div>
+    <div class="playlist-controls">
+      <button class="play-btn-large" onclick="playPlaylist('${playlist.id}')">${playTriangle}</button>
+    </div>
+    <div style="padding:0 32px 32px">
+      <div class="track-list">
+        <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+        ${tracks.map((t,i) => renderTrackRow(t, i+1, tracks)).join('')}
+      </div>
+    </div>`;
+}
+
+// Search View
+function renderSearch() {
+  const q = state.searchQuery || '';
+  let results = '';
+  if (q.length > 0) {
+    const ql = q.toLowerCase();
+    const artists = state.artists.filter(a => a.name.toLowerCase().includes(ql) || a.genre.toLowerCase().includes(ql));
+    const albums = state.albums.filter(a => a.title.toLowerCase().includes(ql) || a.genre.toLowerCase().includes(ql));
+    const tracks = state.tracks.filter(t => t.title.toLowerCase().includes(ql) || t.genre.toLowerCase().includes(ql));
+    results = `
+      ${artists.length ? `<div class="section-header"><h2>Artists</h2></div>
+      <div class="album-grid" style="margin-bottom:24px">
+        ${artists.slice(0,6).map(a => `
+          <div class="album-card" onclick="navigate('artist',{id:'${a.id}'})">
+            <div class="album-cover" style="background:${getColor(a.name)};border-radius:50%">${getInitials(a.name)}</div>
+            <div class="title" style="text-align:center">${a.name}</div>
+            <div class="subtitle" style="text-align:center">${a.genre}</div>
+          </div>`).join('')}
+      </div>` : ''}
+      ${albums.length ? `<div class="section-header"><h2>Albums</h2></div>
+      <div class="album-grid" style="margin-bottom:24px">
+        ${albums.slice(0,6).map(a => renderAlbumCard(a)).join('')}
+      </div>` : ''}
+      ${tracks.length ? `<div class="section-header"><h2>Songs</h2></div>
+      <div class="track-list">
+        <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+        ${tracks.slice(0,20).map((t,i) => renderTrackRow(t, i+1, tracks)).join('')}
+      </div>` : ''}
+      ${!artists.length && !albums.length && !tracks.length ? '<p style="color:var(--text-secondary);margin-top:24px">No results found for "'+q+'"</p>' : ''}
+    `;
+  } else {
+    const genresSet = new Set([...state.artists.map(a=>a.genre),...state.tracks.map(t=>t.genre)].filter(Boolean));
+    const genres = [...genresSet];
+    results = `<div class="section-header"><h2>Browse All</h2></div>
+    <div class="genre-grid">
+      ${genres.map((g,i) => `<div class="genre-card" style="background:${colors[i%colors.length]}" onclick="showGenre('${g}')">${g}</div>`).join('')}
+    </div>`;
+  }
+  return `<div class="content-padding">
+    <div class="search-input-container">
+      <div class="search-icon"><svg viewBox="0 0 24 24"><path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.28-9.407-9.28z"/></svg></div>
+      <input class="search-input" type="text" placeholder="What do you want to listen to?" value="${q}" oninput="onSearch(this.value)" autofocus>
+    </div>
+    ${results}
+  </div>`;
+}
+function onSearch(val) {
+  state.searchQuery = val;
+  render();
+  const inp = document.querySelector('.search-input');
+  if (inp) { inp.focus(); inp.setSelectionRange(val.length, val.length); }
+}
+function showGenre(genre) {
+  state.searchQuery = genre;
+  state.currentView = 'search';
+  render();
+}
+
+// Library View
+function renderLibrary() {
+  const tab = state.viewData?.tab || 'liked';
+  const likedTracks = state.tracks.filter(t => state.likedTracks.has(t.id));
+  let content = '';
+  if (tab === 'liked') {
+    content = likedTracks.length ? `
+      <div class="track-list">
+        <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+        ${likedTracks.map((t,i) => renderTrackRow(t, i+1, likedTracks)).join('')}
+      </div>` : '<p style="color:var(--text-secondary)">No liked songs yet. Click the heart icon on any track to add it here.</p>';
+  } else if (tab === 'recent') {
+    const recent = state.recentlyPlayed.map(id => state.tracks.find(t => t.id === id)).filter(Boolean);
+    content = recent.length ? `
+      <div class="track-list">
+        <div class="track-list-header"><span>#</span><span>Title</span><span>Album</span><span style="text-align:right">Duration</span></div>
+        ${recent.map((t,i) => renderTrackRow(t, i+1, recent)).join('')}
+      </div>` : '<p style="color:var(--text-secondary)">No recently played tracks.</p>';
+  } else {
+    content = `<div class="album-grid">
+      ${state.playlists.map(p => {
+        const pTracks = (p.track_ids||[]).length;
+        return `<div class="album-card" onclick="navigate('playlist',{id:'${p.id}'})">
+          <div class="album-cover" style="background:${getColor(p.name)}">${getInitials(p.name)}</div>
+          <div class="title">${p.name}</div>
+          <div class="subtitle">${pTracks} songs</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  return `<div class="content-padding">
+    <div class="section-header"><h2>Your Library</h2></div>
+    <div class="library-tabs">
+      <div class="library-tab ${tab==='liked'?'active':''}" onclick="navigate('library',{tab:'liked'})">Liked Songs</div>
+      <div class="library-tab ${tab==='recent'?'active':''}" onclick="navigate('library',{tab:'recent'})">Recently Played</div>
+      <div class="library-tab ${tab==='playlists'?'active':''}" onclick="navigate('library',{tab:'playlists'})">Playlists</div>
+    </div>
+    ${content}
+  </div>`;
+}
+
+// Playback
+function playTrackInContext(trackId, queueIds) {
+  if (typeof queueIds === 'string') queueIds = JSON.parse(queueIds.replace(/'/g, '"'));
+  const track = state.tracks.find(t => t.id === trackId);
+  if (!track) return;
+  state.currentTrack = track;
+  state.isPlaying = true;
+  state.queue = queueIds || [trackId];
+  state.queuePosition = state.queue.indexOf(trackId);
+  state.progress = 0;
+  // Add to recently played
+  state.recentlyPlayed = [trackId, ...state.recentlyPlayed.filter(id => id !== trackId)].slice(0, 50);
+  api('/playback/play', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({track_id:trackId, queue:state.queue})});
+  updatePlayerUI();
+  render();
+}
+
+function playAlbum(albumId) {
+  const tracks = state.tracks.filter(t => t.album_id === albumId).sort((a,b) => a.track_number - b.track_number);
+  if (tracks.length) playTrackInContext(tracks[0].id, tracks.map(t => t.id));
+}
+function playPlaylist(playlistId) {
+  const p = state.playlists.find(p => p.id === playlistId);
+  if (p && p.track_ids && p.track_ids.length) {
+    const tracks = p.track_ids.map(id => state.tracks.find(t => t.id === id)).filter(Boolean);
+    if (tracks.length) playTrackInContext(tracks[0].id, tracks.map(t => t.id));
+  }
+}
+
+function togglePlay() {
+  if (!state.currentTrack) return;
+  state.isPlaying = !state.isPlaying;
+  api('/playback/pause', {method:'POST'});
+  updatePlayerUI();
+}
+
+function nextTrack() {
+  if (state.queuePosition < state.queue.length - 1) {
+    state.queuePosition++;
+    const nextId = state.queue[state.queuePosition];
+    const track = state.tracks.find(t => t.id === nextId);
+    if (track) {
+      state.currentTrack = track;
+      state.progress = 0;
+      state.isPlaying = true;
+      state.recentlyPlayed = [nextId, ...state.recentlyPlayed.filter(id => id !== nextId)].slice(0, 50);
+      api('/playback/next', {method:'POST'});
+      updatePlayerUI();
+      render();
+    }
+  }
+}
+
+function prevTrack() {
+  if (state.queuePosition > 0) {
+    state.queuePosition--;
+    const prevId = state.queue[state.queuePosition];
+    const track = state.tracks.find(t => t.id === prevId);
+    if (track) {
+      state.currentTrack = track;
+      state.progress = 0;
+      state.isPlaying = true;
+      state.recentlyPlayed = [prevId, ...state.recentlyPlayed.filter(id => id !== prevId)].slice(0, 50);
+      api('/playback/previous', {method:'POST'});
+      updatePlayerUI();
+      render();
+    }
+  }
+}
+
+function seekTo(e) {
+  if (!state.currentTrack) return;
+  const bar = document.getElementById('progress-bar');
+  const pct = (e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth;
+  state.progress = Math.max(0, Math.min(1, pct)) * state.currentTrack.duration_seconds;
+  updateProgressUI();
+}
+
+function setVolume(e) {
+  const bar = document.getElementById('volume-bar');
+  const pct = (e.clientX - bar.getBoundingClientRect().left) / bar.offsetWidth;
+  state.volume = Math.round(Math.max(0, Math.min(1, pct)) * 100);
+  document.getElementById('volume-fill').style.width = state.volume + '%';
+  api('/playback/volume', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({volume:state.volume})});
+}
+
+// Like
+async function toggleLike(trackId) {
+  if (state.likedTracks.has(trackId)) state.likedTracks.delete(trackId);
+  else state.likedTracks.add(trackId);
+  api('/library/like', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({track_id:trackId})});
+  render();
+  renderSidebar();
+  updatePlayerUI();
+}
+function toggleCurrentLike() {
+  if (state.currentTrack) toggleLike(state.currentTrack.id);
+}
+
+// Player UI
+function updatePlayerUI() {
+  const t = state.currentTrack;
+  const art = document.getElementById('player-art');
+  const name = document.getElementById('player-track-name');
+  const artist = document.getElementById('player-track-artist');
+  const likeBtn = document.getElementById('player-like-btn');
+  const playIcon = document.getElementById('play-icon');
+  const pauseIcon = document.getElementById('pause-icon');
+  if (t) {
+    const a = state.artists.find(a => a.id === t.artist_id);
+    art.style.background = getColor(t.title);
+    art.innerHTML = getInitials(t.title);
+    name.textContent = t.title;
+    name.onclick = () => navigate('album', {id: t.album_id});
+    artist.textContent = a ? a.name : '';
+    artist.onclick = () => navigate('artist', {id: t.artist_id});
+    likeBtn.className = 'player-like' + (state.likedTracks.has(t.id) ? ' liked' : '');
+    likeBtn.innerHTML = state.likedTracks.has(t.id) ? heartFull : heartEmpty;
+    document.getElementById('progress-total').textContent = formatDuration(t.duration_seconds);
+  }
+  playIcon.style.display = state.isPlaying ? 'none' : 'block';
+  pauseIcon.style.display = state.isPlaying ? 'block' : 'none';
+  updateProgressUI();
+}
+
+function updateProgressUI() {
+  if (!state.currentTrack) return;
+  const pct = (state.progress / state.currentTrack.duration_seconds) * 100;
+  document.getElementById('progress-fill').style.width = Math.min(100, pct) + '%';
+  document.getElementById('progress-current').textContent = formatDuration(Math.floor(state.progress));
+}
+
+// Progress timer
+setInterval(() => {
+  if (state.isPlaying && state.currentTrack) {
+    state.progress += 1;
+    if (state.progress >= state.currentTrack.duration_seconds) {
+      // Auto-next
+      if (state.queuePosition < state.queue.length - 1) {
+        nextTrack();
+      } else {
+        state.isPlaying = false;
+        state.progress = 0;
+        updatePlayerUI();
+      }
+    }
+    updateProgressUI();
+  }
+}, 1000);
+
+// Init
+loadData().then(() => navigate('home'));
+</script>
+</body>
+</html>
